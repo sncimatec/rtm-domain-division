@@ -1,0 +1,12 @@
+# Ignore objects
+*.[oa] 
+
+# Igone Binaries 
+rtm_main 
+mod_main
+dir.* 
+dobs.bin
+
+# The file containing environment variables 
+# Ignore IDE specific files
+.vscode/
