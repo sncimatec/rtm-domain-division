@@ -1,7 +1,5 @@
 # RTM Domain Division in a multi-GPU environment
 
-# RTM CODE
-
 The folders of RTM codes has four subdirectories: library (lib), velocity models (build), include and source (src).
 
 ## COMPILE
