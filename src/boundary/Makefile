@@ -1,9 +1,9 @@
 CWPROOT = ../../lib/cwp
 
 # source files.
-SRC = taper.c
+SRC = taper.cpp
 
-OBJ = $(SRC:.c=.o)
+OBJ = $(SRC:.cpp=.o)
 
 OUT = ../../lib/libboundary.a
 
@@ -14,13 +14,13 @@ INCLUDES = -I../../include/boundary -I$(CWPROOT)/include
 CFLAGS = -O3 -Wall -Wextra -pedantic -fpermissive
 
 # compiler
-CC = g++
+CC = dpcpp
 
-.SUFFIXES: .c
+.SUFFIXES: .cpp
 
 default: $(OUT)
 
-.c.o:
+.cpp.o:
 	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
 
 $(OUT): $(OBJ)
