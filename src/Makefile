@@ -3,7 +3,7 @@ CWPROOT = ../lib/cwp
 IDIR = ../include
 _DIRS = timestep source boundary
 
-CC = g++
+CC = dpcpp
 CFLAGS = -w -I$(IDIR) $(patsubst %,-I$(IDIR)/%,$(_DIRS)) -I$(CWPROOT)/include -L$(CWPROOT)/lib -L../lib/ -O3 -Wall -Wextra -pedantic
 
 ODIR = .
