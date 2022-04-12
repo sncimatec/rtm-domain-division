@@ -17,7 +17,7 @@ _OBJ = rtm_main.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
 $(ODIR)/%.o: %.cpp $(DEPS)
-	g++ -c -o $@ $< $(CFLAGS)
+	dpcpp -c -o $@ $< $(CFLAGS)
 
 rtm_main: $(OBJ)
 	for dir in ${_DIRS}; do \
