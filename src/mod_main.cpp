@@ -126,7 +126,7 @@ int main (int argc, char **argv){
 	extendvel(nx,nz,nxb,nzb,*vel2);
 
 	/* initialize wave propagation */
-	fd_init(order,nxe,nze,dx,dz,dt);
+	fd_init_org(order,nxe,nze,dx,dz,dt);
 	taper_init(nxb,nzb,fac);
 
 	PP = alloc2float(nze,nxe);
