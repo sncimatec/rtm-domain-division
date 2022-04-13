@@ -159,6 +159,7 @@ void fd_init_sycl(int order, int nxe, int nze, int nxb, int nzb, int nt, int ns,
 {
 	dpct::device_ext &dev_ct1 = dpct::get_current_device();
  	sycl::queue &q_ct1 = dev_ct1.default_queue();
+	
 	float dfrac;
    	nxbin=nxb; nzbin=nzb;
    	brdBufferLength = nxb*sizeof(float);
@@ -265,8 +266,8 @@ void kernel_lap(int order, int nx, int nz, float * __restrict__ p, float * __res
                 sycl::nd_item<2> item_ct1){
 	int half_order=order/2;
 	int i = half_order +
-			item_ct1.get_group(2) * item_ct1.get_local_range().get(2) +
-			item_ct1.get_local_id(2); // Global row index
+			item_ct1.get_group(0) * item_ct1.get_local_range().get(0) +
+			item_ct1.get_local_id(0); // Global row index
 	int j = half_order +
 			item_ct1.get_group(1) * item_ct1.get_local_range().get(1) +
 			item_ct1.get_local_id(1); // Global column index
@@ -295,8 +296,8 @@ void kernel_lap(int order, int nx, int nz, float * __restrict__ p, float * __res
 void kernel_time(int nx, int nz, float *__restrict__ p, float *__restrict__ pp, float *__restrict__ v2, float *__restrict__ lap, float dt2,
                  sycl::nd_item<2> item_ct1){
 
-	int i = item_ct1.get_group(2) * item_ct1.get_local_range().get(2) +
-			item_ct1.get_local_id(2); // Global row index
+	int i = item_ct1.get_group(0) * item_ct1.get_local_range().get(0) +
+			item_ct1.get_local_id(0); // Global row index
 	int j = item_ct1.get_group(1) * item_ct1.get_local_range().get(1) +
 			item_ct1.get_local_id(1); // Global column index
 	int mult = i*nz;
@@ -311,8 +312,8 @@ void kernel_time(int nx, int nz, float *__restrict__ p, float *__restrict__ pp, 
 void kernel_tapper(int nx, int nz, int nxb, int nzb, float *__restrict__ p, float *__restrict__ pp, float *__restrict__ taperx, float *__restrict__ taperz,
                    sycl::nd_item<2> item_ct1){
 
-	int i = item_ct1.get_group(2) * item_ct1.get_local_range().get(2) +
-			item_ct1.get_local_id(2); // nx index
+	int i = item_ct1.get_group(0) * item_ct1.get_local_range().get(0) +
+			item_ct1.get_local_id(0); // nx index
 	int j = item_ct1.get_group(1) * item_ct1.get_local_range().get(1) +
 			item_ct1.get_local_id(1); // nzb index
 	int itxr = nx - 1, mult = i*nz;
@@ -342,14 +343,14 @@ void kernel_src(int nz, float * __restrict__ pp, int sx, int sz, float srce){
 void kernel_updt_wfd(float *wf, float *p, int nx, int nz, int it, int nxb,
                  sycl::nd_item<2> item_ct1){
 
-	int i = item_ct1.get_group(2) * item_ct1.get_local_range().get(2) +
-			item_ct1.get_local_id(2); // Global row index
+	int i = item_ct1.get_group(0) * item_ct1.get_local_range().get(0) +
+			item_ct1.get_local_id(0); // Global row index
 	int j = item_ct1.get_group(1) * item_ct1.get_local_range().get(1) +
 			item_ct1.get_local_id(1); // Global column index
 
   	if(i<nx){
   		if(j<nz){
-			 wf[(it*nx*nz) + (i*nz) + j] = p[((i+nxb)*nz)+j]; 
+			 wf[(it*nx*nz) + (i*nz) + j] = p[((i+nxb)*(nz+(2*nxb)))+j]; 
 		}
   	}
 }
@@ -369,10 +370,6 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 	write_buffers(p,pp,v2,taper_x, taper_z,NULL, NULL,swf,is,0);
 	   	
    	for (int it = 0; it < nt; it++){
-	 	d_swap  = d_pp;
-	 	d_pp = d_p;
-	 	d_p = d_swap;
-		
 		/*
 	 	DPCT1049:1: The workgroup size passed to the
                  * SYCL kernel may exceed the limit. To get the device limit,
@@ -395,7 +392,6 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 				});
 		});
 	
-		
 		// /*
 	 	// DPCT1049:2: The workgroup size passed to the
         //          * SYCL kernel may exceed the limit. To get the device limit,
@@ -469,19 +465,26 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 			auto d_p_ct2 = d_p;
 			auto it_ct3 = it; 
 			auto nxbin_ct4 = nxbin;
+			auto nx_ct5 = (nx - (2*nxbin)); 
+			auto nz_ct6 = (nz - (2*nzbin)); 
 
 			cgh.parallel_for(
 				sycl::nd_range<2>(dimGrid * dimBlock, dimBlock),
 				[=](sycl::nd_item<2> item_ct1) {
-						kernel_updt_wfd(d_swf_ct1, d_p_ct2, nx, nz, it_ct3, nxbin_ct4, 
+						kernel_updt_wfd(d_swf_ct1, d_p_ct2, 
+						nx_ct5, nz_ct6, it_ct3, nxbin_ct4, 
 						item_ct1);
 				});
 		});
 
+		d_swap  = d_pp;
+	 	d_pp = d_p;
+	 	d_p = d_swap;
+
 		if((it+1)%100 == 0){fprintf(stdout,"\r* it = %d / %d (%d%)",it+1,nt,(100*(it+1)/nt));fflush(stdout);fprintf(stdout,"\n");}
 		
  	}
-        q_ct1.memcpy(p[0], d_p, mtxBufferLength).wait();
-        q_ct1.memcpy(pp[0], d_pp, mtxBufferLength).wait();
+        // q_ct1.memcpy(p[0], d_p, mtxBufferLength).wait();
+        // q_ct1.memcpy(pp[0], d_pp, mtxBufferLength).wait();
         q_ct1.memcpy(swf[0][0], d_swf, waveBufferLength).wait();
 }
