@@ -9,7 +9,7 @@ void fd_init(int order, int nx, int nz, int nxb, int nzb, int nt, int ns, float 
 
 void fd_step(int order, float **p, float **pp, float **v2, int nz, int nx);
 void write_buffers(float **p, float **pp, float **v2, float *taperx, float *taperz, 
-                float **d_obs, float **imloc, float ***wf, int is, int flag);
+                float **d_obs, float **imloc, float ***wf, int flag);
 void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,  
 			    int nx, int nz, int nt, int is, int sz, int *sx, float *srce); 
 
