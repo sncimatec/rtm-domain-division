@@ -165,37 +165,15 @@ int main (int argc, char **argv){
 		memset(*P,0,nze*nxe*sizeof(float));
 		memset(*data,0,nx*nt*sizeof(float));
 		memset(**swf,0,nz*nx*nt*sizeof(float));
-		fd_forward(order, P,PP,vel2, swf, nxe, nze, nt, is, sz, sx, srce); 
-		// for(it=0; it<nt; it++){
-		// 	/* propagate to t+dt */
-		// 	fd_step(order,P,PP,vel2,nze,nxe);
-
-		// 	/* add source */
-		// 	ptsrc(sx[is],sz,nxe,nze,srce[it],PP);
-
-		// 	/* boundary conditions */
-		// 	taper_apply(PP,nx,nz,nxb,nzb);
-		// 	taper_apply(P,nx,nz,nxb,nzb);
-
-		// 	for(iz=0; iz<nz; iz++){
-		// 		for(ix=0; ix<nx; ix++){
-		// 			swf[it][ix][iz] = P[ix+nxb][iz+nzb];
-		// 		}
-		// 	}
-
-		// 	if(it%100 == 0)fprintf(stdout,"* it = %d / %d \n",it,nt);
-
-		// 	tmp = PP;
-		// 	PP = P;
-		// 	P = tmp;
-		// }
+		
+		fd_forward(order, P, PP, vel2, swf,
+			nxe, nze, nt, is, sz, sx, srce); 
 
 		fprintf(stdout,"** backward propagation %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
 
 		memset(*PP,0,nze*nxe*sizeof(float));
 		memset(*P,0,nze*nxe*sizeof(float));
 		memset(*imloc,0,nz*nx*sizeof(float));
-
 			
 		for(it=0; it<nt; it++){
 			/* propagate to t-dt */
@@ -231,7 +209,7 @@ int main (int argc, char **argv){
 				}
 			}
 		} 
-		
+
 		/* save local image */
 		fwrite(*imloc,sizeof(float),nz*nx,flim);
 
