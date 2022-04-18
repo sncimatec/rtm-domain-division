@@ -160,7 +160,6 @@ void fd_init_sycl(int order, int nxe, int nze, int nxb, int nzb, int nt, int ns,
 	dpct::device_ext &dev_ct1 = dpct::get_current_device();
  	sycl::queue &q_ct1 = dev_ct1.default_queue();
 	
-	float dfrac;
    	nxbin=nxb; nzbin=nzb;
    	
 	brdBufferLength = nxb * sizeof(float);
@@ -171,13 +170,11 @@ void fd_init_sycl(int order, int nxe, int nze, int nxb, int nzb, int nt, int ns,
 	taper_x = alloc1float(nxb);
 	taper_z = alloc1float(nzb);
 
-	dfrac = sqrt(-log(fac)) / (1. * nxb);
 	for(int i=0;i<nxb;i++)
-		taper_x[i] = exp(-pow((dfrac * (nxb - i)), 2));
+		taper_x[i] = exp(-pow((fac * (nxb - i)), 2));
 
-	dfrac = sqrt(-log(fac)) / (1. * nzb);
 	for(int i=0;i<nzb;i++)
-		taper_z[i] = exp(-pow((dfrac * (nzb - i)), 2));
+		taper_z[i] = exp(-pow((fac * (nzb - i)), 2));
 
 	// Create a Device pointers
 	d_p = (float *)sycl::malloc_device(mtxBufferLength, q_ct1);
@@ -202,16 +199,11 @@ void fd_init_sycl(int order, int nxe, int nze, int nxb, int nzb, int nt, int ns,
 	int div_x, div_z;
 	
 	// Set a Grid for the execution on the device
-	div_x = (float) nxe/(float) sizeblock;
-	div_z = (float) nze/(float) sizeblock;
-	gridx = (int)ceil(div_x);
-	gridz = (int)ceil(div_z);
-
-	div_x = (float) nxb/(float) sizeblock;
-	div_z = (float) nzb/(float) sizeblock;
 	
-	gridBorder_x = (int)ceil(div_x);
-	gridBorder_z = (int)ceil(div_z);
+	gridx = (float) (((nxe / sizeblock) + 1) * sizeblock)/(float) sizeblock;
+	gridz = (float) (((nze / sizeblock) + 1) * sizeblock)/(float) sizeblock;
+	gridBorder_x = (float) (((nxb / sizeblock) + 1) * sizeblock)/(float) sizeblock;
+	gridBorder_z = (float) (((nzb / sizeblock) + 1) * sizeblock)/(float) sizeblock;
 }
 
 void fd_init(int order, int nx, int nz, int nxb, int nzb, int nt, int ns, float fac, float dx, float dz, float dt)
@@ -370,8 +362,6 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 	sycl::range<2> dimGrid(gridx, gridz);
 	sycl::range<2> dimGridTaper(gridx, gridBorder_z);
 
-	sycl::range<2> dimGridSingle(1, 1);
-
 	sycl::range<2> dimBlock(sizeblock, sizeblock);
 	write_buffers(p, pp, v2, taper_x, taper_z, NULL, NULL, swf, 0);
 	   	
@@ -444,6 +434,7 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
         //          * query info::device::max_work_group_size. Adjust the workgroup
         //          * size if needed.
 	 	// */
+
 		q_ct1.submit([&](sycl::handler &cgh) {
 			auto nxbin_ct2 = nxbin;
 			auto nzbin_ct3 = nzbin;
@@ -461,7 +452,7 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 										d_taperx_ct6, d_taperz_ct7,
 										item_ct1);
 				});
-		}).wait();;
+		}).wait();
 
 		q_ct1.submit([&](sycl::handler &cgh) {
 			auto d_swf_ct1 = d_swf;
