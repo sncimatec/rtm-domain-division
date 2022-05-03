@@ -59,7 +59,7 @@ int main (int argc, char **argv){
 
 	/* propagation variables */
 	float **PP,**P,**tmp;
-	float ***swf, ***rwf, **vel2, **data;
+	float ***swf, ***rwf, **vel2;
 	float **imloc, **img, ***dobs;
 
 	/* initialization admiting self documentation */
@@ -141,7 +141,6 @@ int main (int argc, char **argv){
 
 	PP = alloc2float(nze,nxe);
 	P = alloc2float(nze,nxe);
-	data = alloc2float(nt,nx);
 	swf = alloc3float(nz,nx,nt);
 	rwf = alloc3float(nz,nx,nt);
 	imloc = alloc2float(nz,nx);
@@ -163,7 +162,6 @@ int main (int argc, char **argv){
 
 		memset(*PP,0,nze*nxe*sizeof(float));
 		memset(*P,0,nze*nxe*sizeof(float));
-		memset(*data,0,nx*nt*sizeof(float));
 		memset(**swf,0,nz*nx*nt*sizeof(float));
 		
 		fd_forward(order, P, PP, vel2, swf,
@@ -175,33 +173,10 @@ int main (int argc, char **argv){
 		memset(*P,0,nze*nxe*sizeof(float));
 		memset(*imloc,0,nz*nx*sizeof(float));
 			
-		for(it=0; it<nt; it++){
-			/* propagate to t-dt */
-			fd_step(order,P,PP,vel2,nze,nxe);
+		fd_backward(order, P, PP, vel2, rwf, dobs, 
+			nxe, nze, nt, ns, gz,  is, it, sz, sx, srce); 
 
-			/* add seismograms */
-			for(ix=0; ix<nx; ix++){
-				PP[ix+nzb][gz] += dobs[is][ix][nt-it];
-			}
-
-			/* boundary conditions */
-			taper_apply(PP,nx,nz,nxb,nzb);
-			taper_apply(P,nx,nz,nxb,nzb);
-
-			if(it%100 == 0)fprintf(stdout,"* it = %d / %d \n",it,nt);
-
-			for(iz=0; iz<nz; iz++){
-				for(ix=0; ix<nx; ix++){
-					rwf[it][ix][iz] = P[ix+nxb][iz+nzb];
-				}
-			}			
-
-			tmp = PP;
-			PP = P;
-			P = tmp;
-		}
-
-	/* apply imaging condition */
+		/* apply imaging condition */
 		for(it=0; it<nt; it++){
 			for(iz=0; iz<nz; iz++){
 				for(ix=0; ix<nx; ix++){
@@ -209,9 +184,6 @@ int main (int argc, char **argv){
 				}
 			}
 		} 
-
-		/* save local image */
-		fwrite(*imloc,sizeof(float),nz*nx,flim);
 
 		/* stack migrated images */
 		for(iz=0; iz<nz; iz++){
@@ -228,29 +200,12 @@ int main (int argc, char **argv){
 	fd_destroy();
 	taper_destroy();	
 
-	/*FILE *fp3;
-	sprintf(file,"%s/models.bin\0",tmpdir);
-	fp3 = fopen(file,"a+");
-	fwrite(*vp,sizeof(float),nx*nz,fp3);
-	fclose(fp3);*/
-
-	/*if(rank == 1){	// saving with loops
-		FILE *fp2;
-		sprintf(file,"%s/input_shots.bin\0",tmpdir);
-		fp2 = fopen(file,"a+");
-		for(ishot = 0; ishot < ntraces; ishot++){
-			fwrite(shot[ishot].data,sizeof(float),ns,fp2);
-		}
-		fclose(fp2);
-	}*/
-
 	/* release memory */
 	free1int(sx);
 	free1float(srce);
 	free2float(vp);
 	free2float(P);
 	free2float(PP);
-	free2float(data);
 	free3float(swf);
 	free3float(dobs);
 	free2float(imloc);
