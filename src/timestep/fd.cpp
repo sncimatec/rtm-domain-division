@@ -238,7 +238,6 @@ void write_buffers(float **p, float **pp, float **v2, float *taperx, float *tape
 	dpct::device_ext &dev_ct1 = dpct::get_current_device();
 	sycl::queue &q_ct1 = dev_ct1.default_queue();
 	// gettimeofday(&startCopyMem, NULL);
-	if(flag == 0){
 		q_ct1.memcpy(d_p, p[0], mtxBufferLength).wait();
 		q_ct1.memcpy(d_pp, pp[0], mtxBufferLength).wait();
 		q_ct1.memcpy(d_v2, v2[0], mtxBufferLength).wait();
@@ -249,20 +248,11 @@ void write_buffers(float **p, float **pp, float **v2, float *taperx, float *tape
 		
 		q_ct1.memcpy(d_taperx, taperx, brdBufferLength).wait();
 		q_ct1.memcpy(d_taperz, taperz, brdBufferLength).wait();
+	
+	if(flag == 0)
 		q_ct1.memcpy(d_swf, wf[0][0], waveBufferLength).wait();
-	}
 	if(flag == 1){
-		q_ct1.memcpy(d_p, p[0], mtxBufferLength).wait();
-		q_ct1.memcpy(d_pp, pp[0], mtxBufferLength).wait();
-		q_ct1.memcpy(d_v2, v2[0], mtxBufferLength).wait();
-		q_ct1.memcpy(d_laplace, laplace[0], mtxBufferLength).wait();
-		
-		q_ct1.memcpy(d_coefs_x, coefs_x, coefsBufferLength).wait();
-		q_ct1.memcpy(d_coefs_z, coefs_z, coefsBufferLength).wait();
-		
-		q_ct1.memcpy(d_taperx, taperx, brdBufferLength).wait();
-		q_ct1.memcpy(d_taperz, taperz, brdBufferLength).wait();
-		q_ct1.memcpy(d_rwf, wf[0][0], waveBufferLength).wait();
+			q_ct1.memcpy(d_rwf, wf[0][0], waveBufferLength).wait();
 		q_ct1.memcpy(d_dobs, dobs[0][0], dobsBufferLength).wait();
 	}
 	// gettimeofday(&endCopyMem, NULL);
@@ -405,7 +395,7 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 									d_laplace_ct4, d_coefs_x_ct5,
 									d_coefs_z_ct6, item_ct1);
 				});
-		});
+		}).wait();
 	
 		/*
 	 	DPCT1049:2: The workgroup size passed to the
@@ -428,7 +418,7 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 									d_v2_ct4, d_laplace_ct5,
 									dt2_ct6, item_ct1);
 				});
-		});
+		}).wait();
 		
 		/*
 	 	DPCT1049:3: The workgroup size passed to the
@@ -445,14 +435,14 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 					kernel_src(
 					nz, d_pp_ct1, sx_is_ct2, sz	,srce_it_ct4);
 				});
-		});
+		}).wait();
 
-				// /*
-	 	// DPCT1049:0: The workgroup size passed to the
-        //          * SYCL kernel may exceed the limit. To get the device limit,
-        //          * query info::device::max_work_group_size. Adjust the workgroup
-        //          * size if needed.
-	 	// */
+		/*
+	 	DPCT1049:0: The workgroup size passed to the
+                 * SYCL kernel may exceed the limit. To get the device limit,
+                 * query info::device::max_work_group_size. Adjust the workgroup
+                 * size if needed.
+	 	*/
 
 		q_ct1.submit([&](sycl::handler &cgh) {
 			auto nxbin_ct2 = nxbin;
@@ -473,12 +463,12 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 				});
 		}).wait();
 
-		// /*
-	 	// DPCT1049:0: The workgroup size passed to the
-        //          * SYCL kernel may exceed the limit. To get the device limit,
-        //          * query info::device::max_work_group_size. Adjust the workgroup
-        //          * size if needed.
-	 	// */
+		/*
+	 	DPCT1049:0: The workgroup size passed to the
+                 * SYCL kernel may exceed the limit. To get the device limit,
+                 * query info::device::max_work_group_size. Adjust the workgroup
+                 * size if needed.
+	 	*/
 
 		q_ct1.submit([&](sycl::handler &cgh) {
 			auto d_swf_ct1 = d_swf;
@@ -495,7 +485,7 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 						nx_ct5, nz_ct6, it_ct3, nxbin_ct4, 
 						item_ct1);
 				});
-		});
+		}).wait();
       
 
 		d_swap  = d_pp;
@@ -545,7 +535,7 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
 									d_laplace_ct4, d_coefs_x_ct5,
 									d_coefs_z_ct6, item_ct1);
 				});
-		});
+		}).wait();;
 	
 		/*
 	 	DPCT1049:2: The workgroup size passed to the
@@ -568,7 +558,7 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
 									d_v2_ct4, d_laplace_ct5,
 									dt2_ct6, item_ct1);
 				});
-		});
+		}).wait();;
 		
 		/*
 	 	DPCT1049:3: The workgroup size passed to the
@@ -589,14 +579,14 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
 					kernel_sism(nx, nz, nzbin_ct5, nt, ns, it_ct3, is_ct4, 
 						gz, d_pp_ct2, d_dobs_ct1, item_ct1);
 				});
-		});
+		}).wait();;
 
-		// /*
-	 	// DPCT1049:0: The workgroup size passed to the
-        //          * SYCL kernel may exceed the limit. To get the device limit,
-        //          * query info::device::max_work_group_size. Adjust the workgroup
-        //          * size if needed.
-	 	// */
+		/*
+	 	DPCT1049:0: The workgroup size passed to the
+                 * SYCL kernel may exceed the limit. To get the device limit,
+                 * query info::device::max_work_group_size. Adjust the workgroup
+                 * size if needed.
+	 	*/
 
 		q_ct1.submit([&](sycl::handler &cgh) {
 			auto nxbin_ct2 = nxbin;
@@ -617,12 +607,12 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
 				});
 		}).wait();
 		
-		// // // /*
-	 	// // // DPCT1049:0: The workgroup size passed to the
-        // // //          * SYCL kernel may exceed the limit. To get the device limit,
-        // // //          * query info::device::max_work_group_size. Adjust the workgroup
-        // // //          * size if needed.
-	 	// // // */
+		/*
+	 	DPCT1049:0: The workgroup size passed to the
+                 * SYCL kernel may exceed the limit. To get the device limit,
+                 * query info::device::max_work_group_size. Adjust the workgroup
+                 * size if needed.
+	 	*/
 
 		q_ct1.submit([&](sycl::handler &cgh) {
 			auto d_rwf_ct1 = d_rwf;
@@ -639,7 +629,7 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
 						nx_ct5, nz_ct6, it_ct3, nxbin_ct4, 
 						item_ct1);
 				});
-		});
+		}).wait();;
 
 		d_swap  = d_pp;
 	 	d_pp = d_p;

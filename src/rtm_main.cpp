@@ -160,8 +160,8 @@ int main (int argc, char **argv){
 	for(is=0; is<ns; is++){
 		fprintf(stdout,"** source %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
 
-		memset(*PP,0,nze*nxe*sizeof(float));
 		memset(*P,0,nze*nxe*sizeof(float));
+		memset(*PP,0,nze*nxe*sizeof(float));
 		memset(**swf,0,nz*nx*nt*sizeof(float));
 		
 		fd_forward(order, P, PP, vel2, swf,
@@ -169,8 +169,8 @@ int main (int argc, char **argv){
 
 		fprintf(stdout,"** backward propagation %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
 
-		memset(*PP,0,nze*nxe*sizeof(float));
 		memset(*P,0,nze*nxe*sizeof(float));
+		memset(*PP,0,nze*nxe*sizeof(float));
 		memset(*imloc,0,nz*nx*sizeof(float));
 			
 		fd_backward(order, P, PP, vel2, rwf, dobs, 
