@@ -166,11 +166,11 @@ int main (int argc, char **argv){
 			fd_step(order,P,PP,vel2,nze,nxe);
 
 			/* add source */
-			ptsrc(sx[is],sz,nxe,nze,srce[it],PP);
+			PP[sx[is]][sz] += srce[it];
 
 			/* boundary conditions */
-			taper_apply(PP,nx,nz,nxb,nzb);
-			taper_apply(P,nx,nz,nxb,nzb);
+			taper_apply2(PP,nx,nz,nxb,nzb);
+			taper_apply2(P,nx,nz,nxb,nzb);
 
 			for(iz=0; iz<nz; iz++){
 				for(ix=0; ix<nx; ix++){
@@ -201,8 +201,8 @@ int main (int argc, char **argv){
 			}
 
 			/* boundary conditions */
-			taper_apply(PP,nx,nz,nxb,nzb);
-			taper_apply(P,nx,nz,nxb,nzb);
+			taper_apply2(PP,nx,nz,nxb,nzb);
+			taper_apply2(P,nx,nz,nxb,nzb);
 
 			if(it%100 == 0)fprintf(stdout,"* it = %d / %d \n",it,nt);
 

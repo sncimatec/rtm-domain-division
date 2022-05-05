@@ -66,6 +66,24 @@ void taper_apply(float **pp,int nx, int nz, int nxb, int nzb){
 	return;
 }
 
+void taper_apply2(float **pp,int nx, int nz, int nxb, int nzb){
+        int itz, itx, itxr;
+
+        for(itx=0;itx<nx+2*nxb;itx++){
+                for(itz=0;itz<nzb;itz++){
+                        pp[itx][itz] *= taperz[itz];
+                }
+        }
+        for(itx=0,itxr=nx+2*nxb-1;itx<nxb;itx++,itxr--){
+                for(itz=0;itz<nzb;itz++){
+                        pp[itx][itz]  *= taperx[itx];
+                        pp[itxr][itz] *= taperx[itx];
+                }
+        }
+        return;
+}
+
+
 void taper_destroy(){
 	free1float(taperx);
 	free1float(taperz);
