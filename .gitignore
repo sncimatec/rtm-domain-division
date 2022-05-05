@@ -6,6 +6,9 @@ rtm_main
 mod_main
 dir.* 
 dobs.bin
+/lib/cwp/bin/
+/lib/cwp/include/
+
 
 # The file containing environment variables 
 # Ignore IDE specific files
