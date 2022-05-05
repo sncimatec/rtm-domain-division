@@ -1,3 +1,10 @@
+# Pre-Requisites 
+If you using os UBUNTU 
+apt-get install libxt-dev xorg libx11-dev
+
+Before run your code, go to lib/cwp folder, and: 
+sh install.sh 
+
 # RTM Domain Division in a multi-GPU environment
 
 The folders of RTM codes has four subdirectories: library (lib), velocity models (build), include and source (src).
