@@ -16,6 +16,8 @@ extern "C"{
 #include "ptsrc.h"
 #include "taper.h"
 
+#include <omp.h>
+
 char *sdoc[] = {	/* self documentation */
 	" Seismic migration using acoustic wave equation - RTM ",
 	"				                       ",
@@ -51,14 +53,14 @@ int main (int argc, char **argv){
 	FILE *fvp = NULL, *fsns = NULL, *fsnr = NULL, *fdat = NULL, *fimg = NULL, *flim = NULL, *fdobs = NULL;
 
 	/* iteration variables */
-	int iz, ix, it, is;
+	int iz, ix, it, is, tid;
 
 	/* arrays */
 	float *srce;
 	float **vp = NULL;
 
 	/* propagation variables */
-	float **PP,**P,**tmp;
+	float **PP,**P, **PPR,**PR, **tmp;
 	float ***swf, ***rwf, **vel2;
 	float **imloc, **img, ***dobs;
 
@@ -140,7 +142,9 @@ int main (int argc, char **argv){
 	taper_init(nxb,nzb,fac);
 
 	PP = alloc2float(nze,nxe);
+	PPR = alloc2float(nze,nxe);
 	P = alloc2float(nze,nxe);
+	PR = alloc2float(nze,nxe);
 	swf = alloc3float(nz,nx,nt);
 	rwf = alloc3float(nz,nx,nt);
 	imloc = alloc2float(nz,nx);
@@ -157,24 +161,37 @@ int main (int argc, char **argv){
 	fclose(fdobs);
 
 	memset(*img,0,nz*nx*sizeof(float));
+	/*
+	* Set OpenMP environment to 2 threads:
+	*  - t0: forward propagation
+	*  - t1: backward propagation
+	*/
+	omp_set_num_threads(2);
 	for(is=0; is<ns; is++){
-		fprintf(stdout,"** source %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
+		#pragma omp parallel private(tid)
+		{
+			tid = omp_get_thread_num(); 
+			if(tid == 0){
+				// fprintf(stdout,"** source %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
 
-		memset(*P,0,nze*nxe*sizeof(float));
-		memset(*PP,0,nze*nxe*sizeof(float));
-		memset(**swf,0,nz*nx*nt*sizeof(float));
-		
-		fd_forward(order, P, PP, vel2, swf,
-			nxe, nze, nt, is, sz, sx, srce); 
+				memset(*P,0,nze*nxe*sizeof(float));
+				memset(*PP,0,nze*nxe*sizeof(float));
+				memset(**swf,0,nz*nx*nt*sizeof(float));
 
-		fprintf(stdout,"** backward propagation %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
+				fd_forward(order, P, PP, vel2, swf,
+					nxe, nze, nt, is, sz, sx, srce, tid); 
+			}else{
+				// fprintf(stdout,"** backward propagation %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
 
-		memset(*P,0,nze*nxe*sizeof(float));
-		memset(*PP,0,nze*nxe*sizeof(float));
-		memset(*imloc,0,nz*nx*sizeof(float));
-			
-		fd_backward(order, P, PP, vel2, rwf, dobs, 
-			nxe, nze, nt, ns, gz,  is, it, sz, sx, srce); 
+				memset(*PR,0,nze*nxe*sizeof(float));
+				memset(*PPR,0,nze*nxe*sizeof(float));
+				memset(*imloc,0,nz*nx*sizeof(float));
+					
+				fd_backward(order, PR, PPR, vel2, rwf, dobs, 
+					nxe, nze, nt, ns, gz,  is, it, sz, sx, srce, tid); 			
+			}
+		}
+		#pragma omp barrier
 
 		/* apply imaging condition */
 		for(it=0; it<nt; it++){

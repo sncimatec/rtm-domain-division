@@ -1,3 +1,5 @@
+#include<iostream>
+
 #include "cwp.h"
 #include "fd.h"
 
@@ -7,13 +9,16 @@
 using namespace std; 
 using namespace sycl; 
 
-#define sizeblock 16 // Best number to iris 
+#define NGPUS 2 
+#define SIZEBLOCK 16 
 
 static void makeo2 (float *coef,int order);
 
-float *d_p, *d_pr, *d_pp, *d_ppr, *d_swap;
-float *d_laplace, *d_v2, *d_coefs_x, *d_coefs_z;
-float *d_taperx, *d_taperz, *d_swf, *d_rwf, *d_dobs;
+std::vector<sycl::queue> qs;
+
+float *d_p[2], *d_pp[2], *d_swap[2];
+float *d_laplace[2], *d_v2[2], *d_coefs_x[2], *d_coefs_z[2];
+float *d_taperx[2], *d_taperz[2], *d_swf[2], *d_rwf[2], *d_dobs[2];
 
 size_t mtxBufferLength, brdBufferLength;
 size_t imgBufferLength, dobsBufferLength;
@@ -157,6 +162,28 @@ static void makeo2 (float *coef,int order){
 // =========================== Init Input ==========================
 void fd_init_sycl(int order, int nxe, int nze, int nxb, int nzb, int nt, int ns, float fac)
 {
+	// Discover GPUs 
+
+  	auto platforms = sycl::platform::get_platforms();
+	for (auto & p : platforms) {
+		auto pname = p.get_info<sycl::info::platform::name>();
+		auto devices = p.get_devices();
+		for (auto & d : devices ) {
+			if ( (d.is_gpu() || d.is_cpu()) && qs.size() < NGPUS) {
+				std::cout << "Platform: " << pname << std::endl;
+				std::cout << " Device: " << d.get_info<sycl::info::device::name>() << std::endl;
+				qs.push_back(sycl::queue(d));
+			}
+		}
+	}
+	
+	if (qs.size() != NGPUS){
+		std::cout << "Number of GPUs insuficient, platform only has " << qs.size() << " but is necessary 2 or more." << std::endl; 
+		exit(0); 
+	}
+
+	// End Discover 
+	
 	dpct::device_ext &dev_ct1 = dpct::get_current_device();
  	sycl::queue &q_ct1 = dev_ct1.default_queue();
 	
@@ -176,35 +203,37 @@ void fd_init_sycl(int order, int nxe, int nze, int nxb, int nzb, int nt, int ns,
 	for(int i=0;i<nzb;i++)
 		taper_z[i] = exp(-pow((fac * (nzb - i)), 2));
 
-	// Create a Device pointers
-	d_p = (float *)sycl::malloc_device(mtxBufferLength, q_ct1);
-	d_pp = (float *)sycl::malloc_device(mtxBufferLength, q_ct1);
-	d_pr = (float *)sycl::malloc_device(mtxBufferLength, q_ct1);
-	d_ppr = (float *)sycl::malloc_device(mtxBufferLength, q_ct1);
-	
-	d_v2 = (float *)sycl::malloc_device(mtxBufferLength, q_ct1);
-	
-	d_swap = (float *)sycl::malloc_device(mtxBufferLength, q_ct1);
-	d_laplace = (float *)sycl::malloc_device(mtxBufferLength, q_ct1);
+	// Create a Device pointers for both GPUs
+	for(int i =0; i<NGPUS; i++){
+		d_p[i] = (float *)sycl::malloc_device(mtxBufferLength, qs[i]);
+		d_pp[i] = (float *)sycl::malloc_device(mtxBufferLength, qs[i]);
+		
+		d_v2[i] = (float *)sycl::malloc_device(mtxBufferLength, qs[i]);
+		
+		d_swap[i] = (float *)sycl::malloc_device(mtxBufferLength, qs[i]);
+		d_laplace[i] = (float *)sycl::malloc_device(mtxBufferLength, qs[i]);
 
-	d_rwf = (float *)sycl::malloc_device(waveBufferLength, q_ct1);
-	d_swf = (float *)sycl::malloc_device(waveBufferLength, q_ct1);
-	d_dobs = (float *)sycl::malloc_device(dobsBufferLength, q_ct1);
+		d_rwf[i] = (float *)sycl::malloc_device(waveBufferLength, qs[i]);
+		d_swf[i] = (float *)sycl::malloc_device(waveBufferLength, qs[i]);
+		d_dobs[i] = (float *)sycl::malloc_device(dobsBufferLength, qs[i]);
+		
+		d_coefs_x[i] = (float *)sycl::malloc_device(coefsBufferLength, qs[i]);
+		d_coefs_z[i] = (float *)sycl::malloc_device(coefsBufferLength, qs[i]);
+		
+		d_taperx[i] = (float *)sycl::malloc_device(brdBufferLength, qs[i]);
+		d_taperz[i] = (float *)sycl::malloc_device(brdBufferLength, qs[i]);
+	}
 	
-	d_coefs_x = (float *)sycl::malloc_device(coefsBufferLength, q_ct1);
-	d_coefs_z = (float *)sycl::malloc_device(coefsBufferLength, q_ct1);
-	
-	d_taperx = (float *)sycl::malloc_device(brdBufferLength, q_ct1);
-	d_taperz = (float *)sycl::malloc_device(brdBufferLength, q_ct1);
 
 	int div_x, div_z;
 	
 	// Set a Grid for the execution on the device
+	// The grid size has to be the next multiple nearest the original grid size
 	
-	gridx = (float) (((nxe / sizeblock) + 1) * sizeblock)/(float) sizeblock;
-	gridz = (float) (((nze / sizeblock) + 1) * sizeblock)/(float) sizeblock;
-	gridBorder_x = (float) (((nxb / sizeblock) + 1) * sizeblock)/(float) sizeblock;
-	gridBorder_z = (float) (((nzb / sizeblock) + 1) * sizeblock)/(float) sizeblock;
+	gridx = (float) (((nxe / SIZEBLOCK) + 1) * SIZEBLOCK)/(float) SIZEBLOCK;
+	gridz = (float) (((nze / SIZEBLOCK) + 1) * SIZEBLOCK)/(float) SIZEBLOCK;
+	gridBorder_x = (float) (((nxb / SIZEBLOCK) + 1) * SIZEBLOCK)/(float) SIZEBLOCK;
+	gridBorder_z = (float) (((nzb / SIZEBLOCK) + 1) * SIZEBLOCK)/(float) SIZEBLOCK;
 }
 
 void fd_init(int order, int nx, int nz, int nxb, int nzb, int nt, int ns, float fac, float dx, float dz, float dt)
@@ -235,25 +264,23 @@ void fd_init(int order, int nx, int nz, int nxb, int nzb, int nt, int ns, float 
 
 void write_buffers(float **p, float **pp, float **v2, float *taperx, float *taperz, float ***dobs, float ***wf, int flag)
 {
-	dpct::device_ext &dev_ct1 = dpct::get_current_device();
-	sycl::queue &q_ct1 = dev_ct1.default_queue();
 	// gettimeofday(&startCopyMem, NULL);
-		q_ct1.memcpy(d_p, p[0], mtxBufferLength).wait();
-		q_ct1.memcpy(d_pp, pp[0], mtxBufferLength).wait();
-		q_ct1.memcpy(d_v2, v2[0], mtxBufferLength).wait();
-		q_ct1.memcpy(d_laplace, laplace[0], mtxBufferLength).wait();
+		qs[flag].memcpy(d_p[flag], p[0], mtxBufferLength).wait();
+		qs[flag].memcpy(d_pp[flag], pp[0], mtxBufferLength).wait();
+		qs[flag].memcpy(d_v2[flag], v2[0], mtxBufferLength).wait();
+		qs[flag].memcpy(d_laplace[flag], laplace[0], mtxBufferLength).wait();
 		
-		q_ct1.memcpy(d_coefs_x, coefs_x, coefsBufferLength).wait();
-		q_ct1.memcpy(d_coefs_z, coefs_z, coefsBufferLength).wait();
+		qs[flag].memcpy(d_coefs_x[flag], coefs_x, coefsBufferLength).wait();
+		qs[flag].memcpy(d_coefs_z[flag], coefs_z, coefsBufferLength).wait();
 		
-		q_ct1.memcpy(d_taperx, taperx, brdBufferLength).wait();
-		q_ct1.memcpy(d_taperz, taperz, brdBufferLength).wait();
+		qs[flag].memcpy(d_taperx[flag], taperx, brdBufferLength).wait();
+		qs[flag].memcpy(d_taperz[flag], taperz, brdBufferLength).wait();
 	
 	if(flag == 0)
-		q_ct1.memcpy(d_swf, wf[0][0], waveBufferLength).wait();
+		qs[flag].memcpy(d_swf[flag], wf[0][0], waveBufferLength).wait();
 	if(flag == 1){
-			q_ct1.memcpy(d_rwf, wf[0][0], waveBufferLength).wait();
-		q_ct1.memcpy(d_dobs, dobs[0][0], dobsBufferLength).wait();
+			qs[flag].memcpy(d_rwf[flag], wf[0][0], waveBufferLength).wait();
+		qs[flag].memcpy(d_dobs[flag], dobs[0][0], dobsBufferLength).wait();
 	}
 	// gettimeofday(&endCopyMem, NULL);
 	// execTimeMem += ((endCopyMem.tv_sec - startCopyMem.tv_sec)*1000000 + (endCopyMem.tv_usec - startCopyMem.tv_usec))/1000;
@@ -364,14 +391,12 @@ void kernel_updt_wfd(float *wf, float *p, int nx, int nz, int it, int nxb,
 }
 
 void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,   
-			   int nx, int nz, int nt, int is, int sz, int *sx, float *srce){
+			   int nx, int nz, int nt, int is, int sz, int *sx, float *srce, int flag){
 	
-	dpct::device_ext &dev_ct1 = dpct::get_current_device();
-	sycl::queue &q_ct1 = dev_ct1.default_queue();
 	sycl::range<2> dimGrid(gridx, gridz);
 	sycl::range<2> dimGridTaper(gridx, gridBorder_z);
 
-	sycl::range<2> dimBlock(sizeblock, sizeblock);
+	sycl::range<2> dimBlock(SIZEBLOCK, SIZEBLOCK);
 	write_buffers(p, pp, v2, taper_x, taper_z, NULL, swf, 0);
 	   	
    	for (int it = 0; it < nt; it++){
@@ -382,11 +407,11 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
                  * size if needed.
 	 	*/
 
-		q_ct1.submit([&](sycl::handler &cgh) {
-			auto d_p_ct3 = d_p;
-			auto d_laplace_ct4 = d_laplace;
-			auto d_coefs_x_ct5 = d_coefs_x;
-			auto d_coefs_z_ct6 = d_coefs_z;
+		qs[flag].submit([&](sycl::handler &cgh) {
+			auto d_p_ct3 = d_p[flag];
+			auto d_laplace_ct4 = d_laplace[flag];
+			auto d_coefs_x_ct5 = d_coefs_x[flag];
+			auto d_coefs_z_ct6 = d_coefs_z[flag];
 
 			cgh.parallel_for(
 				sycl::nd_range<2>(dimGrid*dimBlock, dimBlock),
@@ -404,11 +429,11 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
                  * size if needed.
 	 	*/
 		
-		q_ct1.submit([&](sycl::handler &cgh) {
-			auto d_p_ct2 = d_p;
-			auto d_pp_ct3 = d_pp;
-			auto d_v2_ct4 = d_v2;
-			auto d_laplace_ct5 = d_laplace;
+		qs[flag].submit([&](sycl::handler &cgh) {
+			auto d_p_ct2 = d_p[flag];
+			auto d_pp_ct3 = d_pp[flag];
+			auto d_v2_ct4 = d_v2[flag];
+			auto d_laplace_ct5 = d_laplace[flag];
 			auto dt2_ct6 = dt2;
 
 			cgh.parallel_for(
@@ -426,8 +451,8 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
                  * query info::device::max_work_group_size. Adjust the workgroup
                  * size if needed.
 	 	*/
-		q_ct1.submit([&](sycl::handler &cgh) {
-			auto d_pp_ct1 = d_pp;
+		qs[flag].submit([&](sycl::handler &cgh) {
+			auto d_pp_ct1 = d_pp[flag];
 			auto sx_is_ct2 = sx[is];
 			auto srce_it_ct4 = srce[it];
 
@@ -444,13 +469,13 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
                  * size if needed.
 	 	*/
 
-		q_ct1.submit([&](sycl::handler &cgh) {
+		qs[flag].submit([&](sycl::handler &cgh) {
 			auto nxbin_ct2 = nxbin;
 			auto nzbin_ct3 = nzbin;
-			auto d_p_ct4 = d_p;
-			auto d_pp_ct5 = d_pp;
-			auto d_taperx_ct6 = d_taperx;
-			auto d_taperz_ct7 = d_taperz;
+			auto d_p_ct4 = d_p[flag];
+			auto d_pp_ct5 = d_pp[flag];
+			auto d_taperx_ct6 = d_taperx[flag];
+			auto d_taperz_ct7 = d_taperz[flag];
 
 			cgh.parallel_for(
 				sycl::nd_range<2>(dimGridTaper * dimBlock,
@@ -470,9 +495,9 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
                  * size if needed.
 	 	*/
 
-		q_ct1.submit([&](sycl::handler &cgh) {
-			auto d_swf_ct1 = d_swf;
-			auto d_p_ct2 = d_p;
+		qs[flag].submit([&](sycl::handler &cgh) {
+			auto d_swf_ct1 = d_swf[flag];
+			auto d_p_ct2 = d_p[flag];
 			auto it_ct3 = it; 
 			auto nxbin_ct4 = nxbin;
 			auto nx_ct5 = (nx - (2*nxbin)); 
@@ -488,30 +513,27 @@ void fd_forward(int order, float **p, float **pp, float **v2, float ***swf,
 		}).wait();
       
 
-		d_swap  = d_pp;
-	 	d_pp = d_p;
-	 	d_p = d_swap;
+		d_swap[flag]  = d_pp[flag];
+	 	d_pp[flag] = d_p[flag];
+	 	d_p[flag] = d_swap[flag];
 
-		if((it+1)%100 == 0){fprintf(stdout,"\r* it = %d / %d (%d%)",it+1,nt,(100*(it+1)/nt));fflush(stdout);fprintf(stdout,"\n");}
+		// if((it+1)%100 == 0){fprintf(stdout,"\r* it = %d / %d (%d%)",it+1,nt,(100*(it+1)/nt));fflush(stdout);fprintf(stdout,"\n");}
 		
  	}
-	// q_ct1.memcpy(p[0], d_p, mtxBufferLength).wait();
-	// q_ct1.memcpy(pp[0], d_pp, mtxBufferLength).wait();
-	q_ct1.memcpy(swf[0][0], d_swf, waveBufferLength).wait();
+	// qs[flag].memcpy(p[0], d_p, mtxBufferLength).wait();
+	// qs[flag].memcpy(pp[0], d_pp, mtxBufferLength).wait();
+	qs[flag].memcpy(swf[0][0], d_swf[flag], waveBufferLength).wait();
 }
 
 void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, float ***dobs,  
-			   int nx, int nz, int nt, int ns, int gz, int is, int it, int sz, int *sx, float *srce){
-	
-	dpct::device_ext &dev_ct1 = dpct::get_current_device();
-	sycl::queue &q_ct1 = dev_ct1.default_queue();
+			   int nx, int nz, int nt, int ns, int gz, int is, int it, int sz, int *sx, float *srce, int flag){
 	
 	sycl::range<1> dimGridSingle(gridx);
 	sycl::range<2> dimGrid(gridx, gridz);
 	sycl::range<2> dimGridTaper(gridx, gridBorder_z);
 
-	sycl::range<1> dimBlockSingle(sizeblock);
-	sycl::range<2> dimBlock(sizeblock, sizeblock);
+	sycl::range<1> dimBlockSingle(SIZEBLOCK);
+	sycl::range<2> dimBlock(SIZEBLOCK, SIZEBLOCK);
 	write_buffers(p, pp, v2, taper_x, taper_z, dobs, rwf, 1);
 	   	
    	for (int it = 0; it < nt; it++){
@@ -522,11 +544,11 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
                  * size if needed.
 	 	*/
 
-		q_ct1.submit([&](sycl::handler &cgh) {
-			auto d_p_ct3 = d_p;
-			auto d_laplace_ct4 = d_laplace;
-			auto d_coefs_x_ct5 = d_coefs_x;
-			auto d_coefs_z_ct6 = d_coefs_z;
+		qs[flag].submit([&](sycl::handler &cgh) {
+			auto d_p_ct3 = d_p[flag];
+			auto d_laplace_ct4 = d_laplace[flag];
+			auto d_coefs_x_ct5 = d_coefs_x[flag];
+			auto d_coefs_z_ct6 = d_coefs_z[flag];
 
 			cgh.parallel_for(
 				sycl::nd_range<2>(dimGrid*dimBlock, dimBlock),
@@ -544,11 +566,11 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
                  * size if needed.
 	 	*/
 		
-		q_ct1.submit([&](sycl::handler &cgh) {
-			auto d_p_ct2 = d_p;
-			auto d_pp_ct3 = d_pp;
-			auto d_v2_ct4 = d_v2;
-			auto d_laplace_ct5 = d_laplace;
+		qs[flag].submit([&](sycl::handler &cgh) {
+			auto d_p_ct2 = d_p[flag];
+			auto d_pp_ct3 = d_pp[flag];
+			auto d_v2_ct4 = d_v2[flag];
+			auto d_laplace_ct5 = d_laplace[flag];
 			auto dt2_ct6 = dt2;
 
 			cgh.parallel_for(
@@ -566,9 +588,9 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
                  * query info::device::max_work_group_size. Adjust the workgroup
                  * size if needed.
 	 	*/
-		q_ct1.submit([&](sycl::handler &cgh) {
-			auto d_dobs_ct1 = d_dobs;
-			auto d_pp_ct2 = d_pp;
+		qs[flag].submit([&](sycl::handler &cgh) {
+			auto d_dobs_ct1 = d_dobs[flag];
+			auto d_pp_ct2 = d_pp[flag];
 			auto it_ct3 = it; 
 			auto is_ct4 = is; 
 			auto nzbin_ct5 = nzbin;
@@ -588,13 +610,13 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
                  * size if needed.
 	 	*/
 
-		q_ct1.submit([&](sycl::handler &cgh) {
+		qs[flag].submit([&](sycl::handler &cgh) {
 			auto nxbin_ct2 = nxbin;
 			auto nzbin_ct3 = nzbin;
-			auto d_p_ct4 = d_p;
-			auto d_pp_ct5 = d_pp;
-			auto d_taperx_ct6 = d_taperx;
-			auto d_taperz_ct7 = d_taperz;
+			auto d_p_ct4 = d_p[flag];
+			auto d_pp_ct5 = d_pp[flag];
+			auto d_taperx_ct6 = d_taperx[flag];
+			auto d_taperz_ct7 = d_taperz[flag];
 
 			cgh.parallel_for(
 				sycl::nd_range<2>(dimGridTaper * dimBlock,
@@ -614,9 +636,9 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
                  * size if needed.
 	 	*/
 
-		q_ct1.submit([&](sycl::handler &cgh) {
-			auto d_rwf_ct1 = d_rwf;
-			auto d_p_ct2 = d_p;
+		qs[flag].submit([&](sycl::handler &cgh) {
+			auto d_rwf_ct1 = d_rwf[flag];
+			auto d_p_ct2 = d_p[flag];
 			auto it_ct3 = it; 
 			auto nxbin_ct4 = nxbin;
 			auto nx_ct5 = (nx - (2*nxbin)); 
@@ -631,12 +653,12 @@ void fd_backward(int order, float **p, float **pp, float **v2, float ***rwf, flo
 				});
 		}).wait();;
 
-		d_swap  = d_pp;
-	 	d_pp = d_p;
-	 	d_p = d_swap;
+		d_swap[flag] = d_pp[flag];
+	 	d_pp[flag] = d_p[flag];
+	 	d_p[flag] = d_swap[flag];
 
-		if((it+1)%100 == 0){fprintf(stdout,"\r* it = %d / %d (%d%)",it+1,nt,(100*(it+1)/nt));fflush(stdout);fprintf(stdout,"\n");}
+		// if((it+1)%100 == 0){fprintf(stdout,"\r* it = %d / %d (%d%)",it+1,nt,(100*(it+1)/nt));fflush(stdout);fprintf(stdout,"\n");}
 		
  	}
-	q_ct1.memcpy(rwf[0][0], d_rwf, waveBufferLength).wait();
+	qs[flag].memcpy(rwf[0][0], d_rwf[flag], waveBufferLength).wait();
 }
