@@ -171,7 +171,7 @@ int main (int argc, char **argv){
 		#pragma omp parallel private(tid)
 		{
 			tid = omp_get_thread_num(); 
-			if(tid == 0){
+			if(!tid){
 				// fprintf(stdout,"** source %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
 
 				memset(*P,0,nze*nxe*sizeof(float));
