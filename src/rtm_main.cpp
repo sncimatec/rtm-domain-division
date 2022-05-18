@@ -50,7 +50,7 @@ int *sx;
 
 int main (int argc, char **argv){
 	/* model file and data pointers */
-	FILE *fvp = NULL, *fsns = NULL, *fsnr = NULL, *fdat = NULL, *fimg = NULL, *flim = NULL, *fdobs = NULL;
+	FILE *fvp = NULL, *fsns = NULL, *fsnr = NULL, *fdat = NULL, *fimg = NULL, *fdobs = NULL;
 
 	/* iteration variables */
 	int iz, ix, it, is, tid;
@@ -150,7 +150,6 @@ int main (int argc, char **argv){
 	imloc = alloc2float(nz,nx);
 	img = alloc2float(nz,nx);
 
-	flim = fopen("dir.img","w+");
 	fimg = fopen("dir.image","w+");
 	
 	/* Open observed data */
@@ -212,7 +211,6 @@ int main (int argc, char **argv){
 
 	/* save stacked image */
 	fwrite(*img,sizeof(float),nz*nx,fimg);
-	fclose(flim);
 	fclose(fimg);
 	fd_destroy();
 	taper_destroy();	
