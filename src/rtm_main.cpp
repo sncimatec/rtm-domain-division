@@ -18,6 +18,8 @@ extern "C"{
 
 #include <omp.h>
 
+#include <ctime>
+
 char *sdoc[] = {	/* self documentation */
 	" Seismic migration using acoustic wave equation - RTM ",
 	"				                       ",
@@ -165,6 +167,9 @@ int main (int argc, char **argv){
 	*  - t0: forward propagation
 	*  - t1: backward propagation
 	*/
+
+	clock_t begin = clock();
+
 	omp_set_num_threads(2);
 	for(is=0; is<ns; is++){
 		#pragma omp parallel private(tid)
@@ -208,6 +213,10 @@ int main (int argc, char **argv){
 			}
 		}
 	}
+
+	clock_t end = clock();
+  	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+	std::cout << "Execution Time: " << elapsed_secs << "seconds" << std::endl; 
 
 	/* save stacked image */
 	fwrite(*img,sizeof(float),nz*nx,fimg);
