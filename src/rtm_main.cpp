@@ -168,7 +168,7 @@ int main (int argc, char **argv){
 	*  - t1: backward propagation
 	*/
 
-	clock_t begin = clock();
+	double begin = omp_get_wtime(); 
 
 	omp_set_num_threads(2);
 	for(is=0; is<ns; is++){
@@ -214,15 +214,16 @@ int main (int argc, char **argv){
 		}
 	}
 
-	clock_t end = clock();
-  	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
-	std::cout << "Execution Time: " << elapsed_secs << "seconds" << std::endl; 
+	double end = omp_get_wtime(); 
+  	double elapsed_secs = end - begin;
 
 	/* save stacked image */
 	fwrite(*img,sizeof(float),nz*nx,fimg);
 	fclose(fimg);
 	fd_destroy();
 	taper_destroy();	
+
+	printf("Execution Time: %.2f seconds \n", elapsed_secs);
 
 	/* release memory */
 	free1int(sx);
