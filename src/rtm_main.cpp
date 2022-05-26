@@ -169,6 +169,9 @@ int main (int argc, char **argv){
 	*/
 
 	double begin = omp_get_wtime(); 
+	
+	double begin_f[2];
+	double end_f[2]; 
 
 	omp_set_num_threads(2);
 	for(is=0; is<ns; is++){
@@ -177,15 +180,17 @@ int main (int argc, char **argv){
 			tid = omp_get_thread_num(); 
 			if(!tid){
 				// fprintf(stdout,"** source %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
-
+				begin_f[tid] = omp_get_wtime(); 
 				memset(*P,0,nze*nxe*sizeof(float));
 				memset(*PP,0,nze*nxe*sizeof(float));
 				memset(**swf,0,nz*nx*nt*sizeof(float));
 
 				fd_forward(order, P, PP, vel2, swf,
 					nxe, nze, nt, is, sz, sx, srce, tid); 
+				end_f[tid] = omp_get_wtime() - begin_f[tid]; 
 			}else{
 				// fprintf(stdout,"** backward propagation %d, at (%d,%d) \n",is+1,sx[is]-nxb,sz-nzb);
+				begin_f[tid] = omp_get_wtime(); 
 
 				memset(*PR,0,nze*nxe*sizeof(float));
 				memset(*PPR,0,nze*nxe*sizeof(float));
@@ -193,6 +198,7 @@ int main (int argc, char **argv){
 					
 				fd_backward(order, PR, PPR, vel2, rwf, dobs, 
 					nxe, nze, nt, ns, gz,  is, it, sz, sx, srce, tid); 			
+				end_f[tid] = omp_get_wtime() - begin_f[tid]; 
 			}
 		}
 		#pragma omp barrier
@@ -223,6 +229,8 @@ int main (int argc, char **argv){
 	fd_destroy();
 	taper_destroy();	
 
+	printf("Foward Time: %.2f seconds \n", end_f[0]);
+	printf("Backward Time: %.2f seconds \n", end_f[1]);
 	printf("Execution Time: %.2f seconds \n", elapsed_secs);
 
 	/* release memory */
