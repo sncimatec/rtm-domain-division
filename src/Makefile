@@ -4,7 +4,7 @@ IDIR = ../include
 _DIRS = timestep source boundary
 
 CC = g++
-CFLAGS = -w -I$(IDIR) $(patsubst %,-I$(IDIR)/%,$(_DIRS)) -I$(CWPROOT)/include -L$(CWPROOT)/lib -L../lib/ -O3 -Wall -Wextra -pedantic
+CFLAGS = -w -I$(IDIR) $(patsubst %,-I$(IDIR)/%,$(_DIRS)) -I$(CWPROOT)/include -L$(CWPROOT)/lib -L../lib/ -O3 -Wall -Wextra -pedantic -fopenmp
 
 ODIR = .
 LIBS = $(patsubst %,-l%,$(_DIRS)) -lsu -lpar -lcwp -lm

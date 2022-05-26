@@ -10,6 +10,7 @@ extern "C"{
 #include "fd.h"
 #include "ptsrc.h"
 #include "taper.h"
+#include "omp.h"
 
 char *sdoc[] = {	/* self documentation */
 	" Seismic migration using acoustic wave equation - RTM ",
@@ -151,6 +152,7 @@ int main (int argc, char **argv){
 	dobs = alloc3float(nt,nx,ns); 
 	fread(dobs[0][0],sizeof(float),nt*nx*ns,fdobs);
 	fclose(fdobs);
+	double begin = omp_get_wtime(); 
 
 	memset(*img,0,nz*nx*sizeof(float));
 	for(is=0; is<ns; is++){
@@ -237,6 +239,10 @@ int main (int argc, char **argv){
 		}
 	}
 
+
+	double end = omp_get_wtime(); 
+  	double elapsed_secs = end - begin;
+	printf("Execution Time: %.2f seconds", elapsed_secs); 
 	/* save stacked image */
 	fwrite(*img,sizeof(float),nz*nx,fimg);
 	fclose(flim);
